@@ -2,7 +2,10 @@ package com.galize.app.ui.screen
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
@@ -28,8 +31,45 @@ fun HomeScreen(
     val context = LocalContext.current
     val isServiceRunning by viewModel.isServiceRunning.collectAsState()
     val hasOverlayPermission by viewModel.hasOverlayPermission.collectAsState()
+    val hasNotificationPermission by viewModel.hasNotificationPermission.collectAsState()
+    val hasMediaProjectionPermission by viewModel.hasMediaProjectionPermission.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
+    
+    // Snackbar host state
+    val snackbarHostState = remember { SnackbarHostState() }
+    
+    // Show error snackbar when there's an error
+    LaunchedEffect(errorMessage) {
+        errorMessage?.let {
+            snackbarHostState.showSnackbar(
+                message = it,
+                duration = SnackbarDuration.Long
+            )
+            viewModel.clearError()
+        }
+    }
+
+    // Check permissions when screen loads
+    LaunchedEffect(Unit) {
+        viewModel.checkPermissions(context)
+    }
+
+    // Notification permission launcher (Android 13+)
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        viewModel.checkPermissions(context)
+    }
+    
+    // Media projection permission launcher (Android 14+)
+    val mediaProjectionPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        viewModel.checkPermissions(context)
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Galize") },
@@ -86,13 +126,29 @@ fun HomeScreen(
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
+            // Notification permission check (Android 13+)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
+                OutlinedButton(
+                    onClick = {
+                        notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Grant Notification Permission")
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+            
+            // TODO: MediaProjection 权限按钮后续实现截图功能时需要
+            // if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && !hasMediaProjectionPermission) { ... }
+
             // Main toggle button
             Button(
                 onClick = { viewModel.toggleService(context) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-                enabled = hasOverlayPermission
+                enabled = hasOverlayPermission && hasNotificationPermission
             ) {
                 Text(
                     text = if (isServiceRunning) "Stop Galize" else "Start Galize",
