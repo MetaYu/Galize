@@ -26,7 +26,12 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon
+        run: |
+          for i in 1 2 3; do
+            ./gradlew assembleDebug --no-daemon && break
+            echo "Attempt $i failed, retrying in 15s..."
+            sleep 15
+          done
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
@@ -56,7 +61,12 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build Release APK
-        run: ./gradlew assembleRelease --no-daemon
+        run: |
+          for i in 1 2 3; do
+            ./gradlew assembleRelease --no-daemon && break
+            echo "Attempt $i failed, retrying in 15s..."
+            sleep 15
+          done
 
       - name: Upload Release APK
         uses: actions/upload-artifact@v4
