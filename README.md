@@ -43,7 +43,7 @@
 ## 项目结构
 
 ```
-com.example.galize/
+com.galize.app/
 ├── ai/              # AI 决策引擎（云端 + 本地降级）
 ├── di/              # Hilt 依赖注入模块
 ├── model/           # 数据模型 + Room 实体

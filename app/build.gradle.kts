@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.galize"
+    namespace = "com.galize.app"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.galize"
+        applicationId = "com.galize.app"
         minSdk = 31
         targetSdk = 36
         versionCode = 1
