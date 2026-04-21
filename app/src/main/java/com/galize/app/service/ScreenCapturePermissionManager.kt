@@ -29,7 +29,7 @@ class ScreenCapturePermissionManager(
      * @return Intent to start for permission request
      */
     fun createScreenCaptureIntent(): Intent {
-        logger.d("Creating screen capture intent")
+        logger.D("Creating screen capture intent")
         return projectionManager.createScreenCaptureIntent()
     }
 
