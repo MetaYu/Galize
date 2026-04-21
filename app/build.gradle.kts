@@ -35,6 +35,13 @@ android {
     buildFeatures {
         compose = true
     }
+    
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+        }
+    }
 }
 
 java {
@@ -93,8 +100,27 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
 
     // Testing
-    testImplementation(libs.junit)
+    // Unit Testing - JUnit5
+    testImplementation(libs.junit5.jupiter)
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    
+    // Mocking - MockK
+    testImplementation(libs.mockk)
+    androidTestImplementation(libs.mockk)
+    
+    // Flow Testing - Turbine
+    testImplementation(libs.turbine)
+    
+    // Android Instrumented Testing
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.compose.ui.test)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
+    
+    // Hilt Testing
+    testImplementation(libs.hilt.android.testing)
+    androidTestImplementation(libs.hilt.android.testing)
+    kspAndroidTest(libs.hilt.android.compiler)
+    kspTest(libs.hilt.android.compiler)
 }

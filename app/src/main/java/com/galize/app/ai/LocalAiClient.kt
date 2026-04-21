@@ -4,20 +4,36 @@ import com.galize.app.model.Choice
 import com.galize.app.model.ChoiceResult
 import com.galize.app.model.ChoiceType
 import com.galize.app.model.ConversationContext
+import com.galize.app.utils.GalizeLogger
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * Local AI client for offline fallback.
- * Uses simple heuristics when no local model is available.
- * In production, this would integrate Google AI Edge / MediaPipe LLM.
+ * 
+ * Current implementation uses simple heuristics when no local model is available.
+ * In production, this would integrate Google AI Edge / MediaPipe LLM for true on-device inference.
+ * 
+ * Fallback strategy:
+ * - Analyzes the last message from the other party
+ * - Selects from pre-defined response templates based on keywords
+ * - Provides basic response variety through randomization
+ * 
+ * Limitations:
+ * - No true understanding of context
+ * - Limited response variety
+ * - No subtext analysis
+ * - Fixed affinity delta (0)
  */
 @Singleton
 class LocalAiClient @Inject constructor() : AiClient {
+    private val logger = GalizeLogger("LocalAiClient")
 
     override suspend fun isAvailable(): Boolean = true
 
     override suspend fun generateChoices(context: ConversationContext): Result<ChoiceResult> {
+        logger.D("Generating fallback choices for ${context.messages.size} messages")
+        
         val lastMessage = context.messages.lastOrNull { !it.isFromMe }?.text ?: ""
 
         val result = ChoiceResult(
@@ -40,6 +56,7 @@ class LocalAiClient @Inject constructor() : AiClient {
             affinityDelta = 0
         )
 
+        logger.I("Generated offline fallback choices")
         return Result.success(result)
     }
 

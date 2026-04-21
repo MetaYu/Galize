@@ -6,7 +6,9 @@ package com.galize.app.model
 data class ChatMessage(
     val text: String,
     val isFromMe: Boolean,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val positionX: Int = 0,  // X position on screen for debugging
+    val positionY: Int = 0   // Y position on screen for sorting
 )
 
 /**
