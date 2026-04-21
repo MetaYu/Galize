@@ -61,11 +61,11 @@ class FloatingBubbleService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        logger.i("FloatingBubbleService onCreate")
+        logger.I("FloatingBubbleService onCreate")
         
         // 检查必要的权限
         if (!checkRequiredPermissions()) {
-            logger.e("Required permissions not granted, stopping service")
+            logger.E("Required permissions not granted, stopping service")
             stopSelf()
             return
         }
@@ -90,7 +90,7 @@ class FloatingBubbleService : Service() {
                         android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
                     )
                 } catch (e: SecurityException) {
-                    logger.w("specialUse permission not available, using legacy startForeground")
+                    logger.W("specialUse permission not available, using legacy startForeground")
                     startForeground(NOTIFICATION_ID, createNotification())
                 }
             } else {
@@ -98,9 +98,9 @@ class FloatingBubbleService : Service() {
             }
             
             showBubble()
-            logger.i("FloatingBubbleService started successfully")
+            logger.I("FloatingBubbleService started successfully")
         } catch (e: Exception) {
-            logger.e("Failed to create FloatingBubbleService", e)
+            logger.E("Failed to create FloatingBubbleService", e)
             stopSelf()
         }
     }
@@ -118,7 +118,7 @@ class FloatingBubbleService : Service() {
             ) == PackageManager.PERMISSION_GRANTED
             
             if (!hasNotificationPermission) {
-                logger.w("Notification permission not granted")
+                logger.W("Notification permission not granted")
                 return false
             }
         }
@@ -130,10 +130,10 @@ class FloatingBubbleService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        logger.d("FloatingBubbleService onStartCommand")
+        logger.D("FloatingBubbleService onStartCommand")
         // Initialize screen capture if intent data is available
         screenCaptureIntent?.let { data ->
-            logger.i("Initializing screen capture with intent data")
+            logger.I("Initializing screen capture with intent data")
             screenCaptureManager = ScreenCaptureManager(this, screenCaptureResultCode, data)
         }
         // Return START_NOT_STICKY to prevent auto-restart when killed
@@ -143,7 +143,7 @@ class FloatingBubbleService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        logger.i("FloatingBubbleService onDestroy")
+        logger.I("FloatingBubbleService onDestroy")
         serviceScope.cancel()
         removeBubble()
         removePanel()
@@ -151,7 +151,7 @@ class FloatingBubbleService : Service() {
     }
 
     private fun showBubble() {
-        logger.d("Showing floating bubble")
+        logger.D("Showing floating bubble")
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -183,7 +183,7 @@ class FloatingBubbleService : Service() {
         }
 
         windowManager.addView(bubbleView!!, params)
-        logger.d("Floating bubble added to window")
+        logger.D("Floating bubble added to window")
     }
 
     /**
@@ -191,11 +191,11 @@ class FloatingBubbleService : Service() {
      * Triggers the full pipeline: Screenshot -> OCR -> AI -> Display
      */
     private fun onBubbleTapped() {
-        logger.i("Bubble tapped - starting Galize pipeline")
+        logger.I("Bubble tapped - starting Galize pipeline")
         
         val captureManager = screenCaptureManager
         if (captureManager == null) {
-            logger.e("Screen capture manager not initialized")
+            logger.E("Screen capture manager not initialized")
             Toast.makeText(
                 this,
                 "请先在 Galize 应用中授权屏幕截图权限",
@@ -211,24 +211,24 @@ class FloatingBubbleService : Service() {
         serviceScope.launch {
             try {
                 // Step 1: Capture screen
-                logger.d("Step 1: Capturing screen")
+                logger.D("Step 1: Capturing screen")
                 captureManager.captureScreen { bitmap ->
                     if (bitmap == null) {
-                        logger.e("Screen capture failed")
-                        launch(Dispatchers.Main) {
+                        logger.E("Screen capture failed")
+                        serviceScope.launch(Dispatchers.Main) {
                             Toast.makeText(this@FloatingBubbleService, "截图失败", Toast.LENGTH_SHORT).show()
                         }
                         return@captureScreen
                     }
 
                     // Continue pipeline with captured bitmap
-                    launch(Dispatchers.IO) {
+                    serviceScope.launch(Dispatchers.IO) {
                         processCapturedScreen(bitmap)
                     }
                 }
             } catch (e: Exception) {
-                logger.e("Pipeline failed: ${e.message}", e)
-                launch(Dispatchers.Main) {
+                logger.E("Pipeline failed: ${e.message}", e)
+                serviceScope.launch(Dispatchers.Main) {
                     Toast.makeText(this@FloatingBubbleService, "处理失败: ${e.message}", Toast.LENGTH_LONG).show()
                 }
             }
@@ -241,61 +241,61 @@ class FloatingBubbleService : Service() {
     private suspend fun processCapturedScreen(bitmap: android.graphics.Bitmap) {
         try {
             // Step 2: OCR
-            logger.d("Step 2: Running OCR")
+            logger.D("Step 2: Running OCR")
             val ocrEngine = OcrEngine()
             val textBlocks = ocrEngine.recognizeText(bitmap)
             
             if (textBlocks.isEmpty()) {
-                logger.w("No text detected in screenshot")
-                launch(Dispatchers.Main) {
+                logger.W("No text detected in screenshot")
+                serviceScope.launch(Dispatchers.Main) {
                     Toast.makeText(this@FloatingBubbleService, "未检测到文字", Toast.LENGTH_SHORT).show()
                 }
                 return
             }
 
             // Step 3: Parse chat messages
-            logger.d("Step 3: Parsing chat messages")
+            logger.D("Step 3: Parsing chat messages")
             val screenWidth = resources.displayMetrics.widthPixels
             val parser = ChatMessageParser()
             val messages = parser.parse(textBlocks, screenWidth)
 
             if (messages.isEmpty()) {
-                logger.w("No chat messages parsed")
-                launch(Dispatchers.Main) {
+                logger.W("No chat messages parsed")
+                serviceScope.launch(Dispatchers.Main) {
                     Toast.makeText(this@FloatingBubbleService, "未识别到对话消息", Toast.LENGTH_SHORT).show()
                 }
                 return
             }
 
-            logger.i("Parsed ${messages.size} messages from OCR")
+            logger.I("Parsed ${messages.size} messages from OCR")
 
             // Step 4: AI generates choices
-            logger.d("Step 4: Generating AI choices")
+            logger.D("Step 4: Generating AI choices")
             val context = ConversationContext(messages = messages)
             
             val choiceResult: ChoiceResult = if (cloudAiClient.isAvailable()) {
-                logger.d("Using cloud AI")
+                logger.D("Using cloud AI")
                 cloudAiClient.generateChoices(context).getOrNull() 
                     ?: run {
-                        logger.w("Cloud AI failed, falling back to local")
+                        logger.W("Cloud AI failed, falling back to local")
                         localAiClient.generateChoices(context).getOrNull()
                             ?: throw Exception("AI generation failed")
                     }
             } else {
-                logger.d("Using local AI fallback")
+                logger.D("Using local AI fallback")
                 localAiClient.generateChoices(context).getOrNull()
                     ?: throw Exception("AI generation failed")
             }
 
             // Step 5: Show result panel
-            logger.d("Step 5: Showing choice panel")
-            launch(Dispatchers.Main) {
+            logger.D("Step 5: Showing choice panel")
+            serviceScope.launch(Dispatchers.Main) {
                 showChoicePanel(choiceResult)
             }
 
         } catch (e: Exception) {
-            logger.e("Pipeline processing failed: ${e.message}", e)
-            launch(Dispatchers.Main) {
+            logger.E("Pipeline processing failed: ${e.message}", e)
+            serviceScope.launch(Dispatchers.Main) {
                 Toast.makeText(this@FloatingBubbleService, "处理失败: ${e.message}", Toast.LENGTH_LONG).show()
             }
         } finally {
@@ -307,7 +307,7 @@ class FloatingBubbleService : Service() {
      * Shows the choice panel with AI-generated responses.
      */
     fun showChoicePanel(choiceResult: ChoiceResult) {
-        logger.d("Showing choice panel")
+        logger.D("Showing choice panel")
         
         // Remove existing panel if any
         removePanel()
@@ -340,16 +340,16 @@ class FloatingBubbleService : Service() {
         }
 
         windowManager.addView(panelView!!, params)
-        logger.d("Choice panel added to window")
+        logger.D("Choice panel added to window")
     }
 
     private fun removeBubble() {
         bubbleView?.let {
-            logger.d("Removing floating bubble")
+            logger.D("Removing floating bubble")
             try {
                 windowManager.removeView(it)
             } catch (e: Exception) {
-                logger.e("Error removing bubble: ${e.message}", e)
+                logger.E("Error removing bubble: ${e.message}", e)
             }
             bubbleView = null
         }
@@ -357,18 +357,18 @@ class FloatingBubbleService : Service() {
 
     private fun removePanel() {
         panelView?.let {
-            logger.d("Removing choice panel")
+            logger.D("Removing choice panel")
             try {
                 windowManager.removeView(it)
             } catch (e: Exception) {
-                logger.e("Error removing panel: ${e.message}", e)
+                logger.E("Error removing panel: ${e.message}", e)
             }
             panelView = null
         }
     }
 
     private fun createNotificationChannel() {
-        GalizeLogger.d("Creating notification channel")
+        logger.D("Creating notification channel")
         val channel = NotificationChannel(
             CHANNEL_ID,
             "Galize Floating Service",

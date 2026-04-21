@@ -16,6 +16,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class HomeViewModel @Inject constructor() : ViewModel() {
+    private val logger = GalizeLogger("HomeViewModel")
 
     private val _isServiceRunning = MutableStateFlow(false)
     val isServiceRunning: StateFlow<Boolean> = _isServiceRunning
@@ -49,7 +50,7 @@ class HomeViewModel @Inject constructor() : ViewModel() {
         // 暂时设为 true，不阻塞服务启动
         _hasMediaProjectionPermission.value = true
         
-        GalizeLogger.d("Permissions: overlay=${_hasOverlayPermission.value}, notification=${_hasNotificationPermission.value}")
+        logger.D("Permissions: overlay=${_hasOverlayPermission.value}, notification=${_hasNotificationPermission.value}")
     }
     
     fun clearError() {
@@ -57,47 +58,47 @@ class HomeViewModel @Inject constructor() : ViewModel() {
     }
 
     fun toggleService(context: Context) {
-        GalizeLogger.i("toggleService called, current running state: ${_isServiceRunning.value}")
+        logger.I("toggleService called, current running state: ${_isServiceRunning.value}")
         checkPermissions(context)
         
         if (!_hasOverlayPermission.value) {
             val msg = "请先授予悬浮窗权限"
-            GalizeLogger.w(msg)
+            logger.W(msg)
             _errorMessage.value = msg
             return
         }
         
         if (!_hasNotificationPermission.value) {
             val msg = "请先授予通知权限（Android 13+必需）"
-            GalizeLogger.w(msg)
+            logger.W(msg)
             _errorMessage.value = msg
             return
         }
         
         if (!_hasMediaProjectionPermission.value) {
             val msg = "请先授予媒体投影权限（Android 14+必需）"
-            GalizeLogger.w(msg)
+            logger.W(msg)
             _errorMessage.value = msg
             return
         }
 
         if (_isServiceRunning.value) {
-            GalizeLogger.i("Stopping FloatingBubbleService")
+            logger.I("Stopping FloatingBubbleService")
             context.stopService(Intent(context, FloatingBubbleService::class.java))
             _isServiceRunning.value = false
         } else {
-            GalizeLogger.i("Starting FloatingBubbleService")
+            logger.I("Starting FloatingBubbleService")
             try {
                 val intent = Intent(context, FloatingBubbleService::class.java)
                 context.startForegroundService(intent)
                 _isServiceRunning.value = true
             } catch (e: SecurityException) {
                 val msg = "权限不足：${e.message}"
-                GalizeLogger.e(msg, e)
+                logger.E(msg, e)
                 _errorMessage.value = msg
             } catch (e: Exception) {
                 val msg = "启动失败：${e.message ?: e.javaClass.simpleName}"
-                GalizeLogger.e(msg, e)
+                logger.E(msg, e)
                 _errorMessage.value = msg
             }
         }

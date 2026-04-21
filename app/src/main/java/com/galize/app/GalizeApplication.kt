@@ -13,6 +13,6 @@ class GalizeApplication : Application() {
         // 初始化全局异常捕获器
         CrashHandler.getInstance().init(this)
         
-        GalizeLogger.i("GalizeApplication initialized")
+        GalizeLogger("Application").I("GalizeApplication initialized")
     }
 }

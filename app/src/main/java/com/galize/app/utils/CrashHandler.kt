@@ -79,7 +79,7 @@ class CrashHandler private constructor() : Thread.UncaughtExceptionHandler {
         """.trimIndent()
 
         Log.e(TAG, message)
-        Log.e(TAG, GalizeLogger.formatException(throwable))
+        Log.e(TAG, GalizeLogger("CrashHandler").formatException(throwable))
 
         // 保存到文件
         saveCrashLog(timestamp, message, throwable)
@@ -150,7 +150,7 @@ class CrashHandler private constructor() : Thread.UncaughtExceptionHandler {
             FileWriter(logFile).use { writer ->
                 writer.write(header)
                 writer.write("\n\n")
-                writer.write(GalizeLogger.formatException(throwable))
+                writer.write(GalizeLogger("CrashHandler").formatException(throwable))
                 writer.write("\n\n")
                 writer.write("Device Info:\n")
                 writer.write("  Brand: ${Build.BRAND}\n")

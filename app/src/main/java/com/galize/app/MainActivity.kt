@@ -13,7 +13,7 @@ import dagger.hilt.android.AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        GalizeLogger.i("MainActivity onCreate")
+        GalizeLogger("MainActivity").I("onCreate")
         
         enableEdgeToEdge()
         setContent {
@@ -25,26 +25,26 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        GalizeLogger.i("MainActivity onStart")
+        GalizeLogger("MainActivity").I("onStart")
     }
 
     override fun onResume() {
         super.onResume()
-        GalizeLogger.i("MainActivity onResume")
+        GalizeLogger("MainActivity").I("onResume")
     }
 
     override fun onPause() {
         super.onPause()
-        GalizeLogger.i("MainActivity onPause")
+        GalizeLogger("MainActivity").I("onPause")
     }
 
     override fun onStop() {
         super.onStop()
-        GalizeLogger.i("MainActivity onStop")
+        GalizeLogger("MainActivity").I("onStop")
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        GalizeLogger.i("MainActivity onDestroy")
+        GalizeLogger("MainActivity").I("onDestroy")
     }
 }

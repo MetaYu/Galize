@@ -21,7 +21,7 @@ mockk = "1.13.16"
 turbine = "1.2.0"
 junitVersion = "1.2.1"
 espressoCore = "3.6.1"
-composeUiTest = "2025.04.00"
+composeUiTest = "1.7.8"
 hiltTesting = "2.59.2"
 
 [libraries]

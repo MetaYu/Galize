@@ -47,11 +47,9 @@ class OcrEngine {
                         OcrTextBlock(
                             text = block.text,
                             boundingBox = block.boundingBox,
-                            confidence = block.confidence,
                             lines = block.lines.map { line ->
                                 OcrTextLine(
                                     text = line.text,
-                                    confidence = line.confidence,
                                     left = line.boundingBox?.left ?: 0,
                                     right = line.boundingBox?.right ?: 0,
                                     top = line.boundingBox?.top ?: 0,
@@ -78,13 +76,11 @@ class OcrEngine {
 data class OcrTextBlock(
     val text: String,
     val boundingBox: android.graphics.Rect?,
-    val confidence: Float? = null,
     val lines: List<OcrTextLine>
 )
 
 data class OcrTextLine(
     val text: String,
-    val confidence: Float? = null,
     val left: Int,
     val right: Int,
     val top: Int,

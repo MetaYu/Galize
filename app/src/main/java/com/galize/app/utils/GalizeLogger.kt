@@ -4,29 +4,43 @@ import android.util.Log
 
 /**
  * 统一日志工具类
- * 所有日志都使用 "Galize" 作为 TAG，方便过滤
+ * 支持自定义 Tag，便于按模块过滤日志
+ * 
+ * 使用方式:
+ * - 默认 Tag: GalizeLogger().I("message") - 使用 "Galize" Tag
+ * - 自定义 Tag: GalizeLogger("ModuleName").I("message") - 使用自定义 Tag
+ * 
+ * 日志级别:
+ * - D(): Debug - 调试信息
+ * - I(): Info - 重要流程节点
+ * - W(): Warning - 潜在问题
+ * - E(): Error - 错误和异常
+ * - V(): Verbose - 详细信息
  */
-object GalizeLogger {
-    private const val TAG = "Galize"
-
-    fun d(message: String, throwable: Throwable? = null) {
-        Log.d(TAG, message, throwable)
+class GalizeLogger(private val tag: String = "Galize") {
+    
+    companion object {
+        private const val DEFAULT_TAG = "Galize"
     }
 
-    fun i(message: String, throwable: Throwable? = null) {
-        Log.i(TAG, message, throwable)
+    fun D(message: String) {
+        Log.d(tag, message)
     }
 
-    fun w(message: String, throwable: Throwable? = null) {
-        Log.w(TAG, message, throwable)
+    fun I(message: String) {
+        Log.i(tag, message)
     }
 
-    fun e(message: String, throwable: Throwable? = null) {
-        Log.e(TAG, message, throwable)
+    fun W(message: String, throwable: Throwable? = null) {
+        Log.w(tag, message, throwable)
     }
 
-    fun v(message: String, throwable: Throwable? = null) {
-        Log.v(TAG, message, throwable)
+    fun E(message: String, throwable: Throwable? = null) {
+        Log.e(tag, message, throwable)
+    }
+
+    fun V(message: String) {
+        Log.v(tag, message)
     }
 
     /**
