@@ -58,6 +58,67 @@ com.galize.app/
     └── viewmodel/   # ViewModel 层
 ```
 
+## 功能路线图
+
+### Phase 1 — MVP 核心链路 
+
+> 悬浮球触发截图 → OCR 文字提取 → AI 生成三选项 → 好感度反馈显示
+
+| 模块 | 功能 | 状态 |
+|------|------|------|
+| 悬浮球 Service | 可拖拽悬浮球 + 前台服务生命周期管理 | ✅ 已完成 |
+| 屏幕截图 | MediaProjection API 截图 + 权限引导 | 📋 计划中 |
+| OCR 引擎 | ML Kit Text Recognition v2 中文识别 | 📋 计划中 |
+| 聊天解析 | 气泡位置解析，区分我方/对方消息 | 📋 计划中 |
+| AI 决策 — 云端 | CloudAiClient（OpenAI-compatible API），JSON 格式三选项 | 📋 计划中 |
+| AI 决策 — 本地降级 | LocalAiClient 离线启发式回退 | 📋 计划中 |
+| 悬浮结果面板 | 三色选项卡 + 好感度进度条 + 潜台词显示 | 📋 计划中 |
+| App 主界面 | 首页（权限开关）/ 设置（API Key、人设）/ 历史 | 📋 计划中 |
+| 数据持久化 | Room 对话历史 + DataStore 偏好设置 | 📋 计划中 |
+| 主题 | 赛博朋克紫 Material 3 主题 | 📋 计划中 |
+
+### Phase 2 — 体验增强 🚧
+
+| 模块 | 功能 | 状态 |
+|------|------|------|
+| AI 本地推理 | Google AI Edge 替代启发式降级 | 📋 计划中 |
+| 自动填充 | 选中选项直接填入输入框（无障碍服务） | 📋 计划中 |
+| 多 App 适配 | 微信 / QQ / Telegram 等聊天布局特化解析 | 📋 计划中 |
+| 好感度趋势图 | 历史页展示好感度变化曲线 | 📋 计划中 |
+| 对话上下文记忆 | 多轮对话上下文窗口，提升 AI 连贯性 | 📋 计划中 |
+
+### Phase 3 — 进阶玩法 💡
+
+| 模块 | 功能 | 状态 |
+|------|------|------|
+| 动态立绘 | 根据好感度变化展示角色立绘 | 💡 构想 |
+| 存档 / 结局系统 | 对话分支记录 + 多结局达成 | 💡 构想 |
+| CG 墙 | 收集关键对话截图作为成就 | 💡 构想 |
+| 人设市场 | 社区共享 AI 人设 Prompt 模板 | 💡 构想 |
+| 语音识别 | 支持语音消息的实时转写与分析 | 💡 构想 |
+
+## UI 设计指南
+
+项目遵循赛博朋克风格的统一设计规范，详见 [`docs/design/ui-guide.md`](docs/design/ui-guide.md)，涵盖：
+
+- **色彩体系** — 以 Electric Violet (`#8B5CF6`) 为主色的暗色赛博朋克调色板
+- **组件规范** — 悬浮球、三选项卡片、好感度进度条、潜台词区域等核心组件的样式与交互定义
+- **动效与反馈** — 点击涟漪、面板展开/收起动画、好感度渐变过渡
+- **字体与排版** — 层级式字体大小、行高、间距规范
+
+> 所有 UI 实现基于 Jetpack Compose + Material 3，主题定义位于 [`ui/theme/GalizeTheme.kt`](app/src/main/java/com/galize/app/ui/theme/GalizeTheme.kt)
+
+## 日志规范
+
+项目采用统一的日志体系，详见 [`docs/architecture/logging.md`](docs/architecture/logging.md)，包含：
+
+- **统一入口** — 通过 `GalizeLogger` 封装所有日志调用，禁止直接使用 `android.util.Log`
+- **崩溃捕获** — `CrashHandler` 全局异常拦截，致命错误自动记录
+- **日志级别** — DEBUG / INFO / WARN / ERROR 分级策略
+- **标签规范** — 按模块命名 Tag，便于 Logcat 过滤定位
+
+> 相关实现位于 [`utils/GalizeLogger.kt`](app/src/main/java/com/galize/app/utils/GalizeLogger.kt) 和 [`utils/CrashHandler.kt`](app/src/main/java/com/galize/app/utils/CrashHandler.kt)
+
 ## 构建要求
 
 - Android Studio Narwhal+ (2025.3+)
