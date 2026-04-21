@@ -33,11 +33,11 @@
             </intent-filter>
         </activity>
 
-        <!-- TODO: 实现截图功能时，需要改回 mediaProjection 类型和相应权限请求 -->
+        <!-- 使用 mediaProjection 类型以支持屏幕截图功能 -->
         <service
             android:name=".service.FloatingBubbleService"
             android:exported="false"
-            android:foregroundServiceType="specialUse" />
+            android:foregroundServiceType="mediaProjection" />
 
     </application>
 

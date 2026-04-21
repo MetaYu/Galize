@@ -1,18 +1,23 @@
 package com.galize.app.ui.viewmodel
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Build
-import android.provider.Settings
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import com.galize.app.service.FloatingBubbleService
 import com.galize.app.utils.GalizeLogger
+import com.galize.app.utils.PermissionManager
+import com.galize.app.utils.PermissionManager.PermissionResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import javax.inject.Inject
+
+data class PermissionDialogState(
+    val showDialog: Boolean = false,
+    val permissionResult: PermissionResult? = null
+)
 
 @HiltViewModel
 class HomeViewModel @Inject constructor() : ViewModel() {
@@ -32,29 +37,78 @@ class HomeViewModel @Inject constructor() : ViewModel() {
     
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage
+    
+    // 权限对话框状态
+    private val _permissionDialogState = MutableStateFlow(PermissionDialogState())
+    val permissionDialogState: StateFlow<PermissionDialogState> = _permissionDialogState
+    
+    // 媒体投影权限请求标记
+    private val _shouldRequestMediaProjection = MutableStateFlow(false)
+    val shouldRequestMediaProjection: StateFlow<Boolean> = _shouldRequestMediaProjection
 
     fun checkPermissions(context: Context) {
-        _hasOverlayPermission.value = Settings.canDrawOverlays(context)
+        val overlayResult = PermissionManager.checkOverlayPermission(context)
+        val notificationResult = PermissionManager.checkNotificationPermission(context)
+        val mediaProjectionResult = PermissionManager.checkMediaProjectionPermission(context)
         
-        // Check notification permission (required for Android 13+)
-        _hasNotificationPermission.value = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            ContextCompat.checkSelfPermission(
-                context,
-                android.Manifest.permission.POST_NOTIFICATIONS
-            ) == PackageManager.PERMISSION_GRANTED
-        } else {
-            true // Below Android 13, notification permission not required at runtime
-        }
+        _hasOverlayPermission.value = overlayResult.isGranted
+        _hasNotificationPermission.value = notificationResult.isGranted
+        _hasMediaProjectionPermission.value = mediaProjectionResult.isGranted
         
-        // TODO: MediaProjection 权限检查后续实现截图功能时需要
-        // 暂时设为 true，不阻塞服务启动
-        _hasMediaProjectionPermission.value = true
-        
-        logger.D("Permissions: overlay=${_hasOverlayPermission.value}, notification=${_hasNotificationPermission.value}")
+        logger.D("Permissions: overlay=${_hasOverlayPermission.value}, notification=${_hasNotificationPermission.value}, mediaProjection=${_hasMediaProjectionPermission.value}")
     }
     
     fun clearError() {
         _errorMessage.value = null
+    }
+    
+    fun clearPermissionDialog() {
+        _permissionDialogState.value = PermissionDialogState()
+    }
+    
+    fun showPermissionDialog(permissionResult: PermissionResult) {
+        _permissionDialogState.value = PermissionDialogState(
+            showDialog = true,
+            permissionResult = permissionResult
+        )
+    }
+    
+    /**
+     * 请求特定权限
+     */
+    fun requestPermission(context: Context, permissionType: PermissionManager.PermissionType) {
+        when (permissionType) {
+            PermissionManager.PermissionType.OVERLAY -> {
+                showPermissionDialog(PermissionManager.checkOverlayPermission(context))
+            }
+            PermissionManager.PermissionType.NOTIFICATION -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    showPermissionDialog(PermissionManager.checkNotificationPermission(context))
+                }
+            }
+            PermissionManager.PermissionType.MEDIA_PROJECTION -> {
+                // 媒体投影权限需要特殊处理，通过 ActivityResultLauncher 请求
+                _shouldRequestMediaProjection.value = true
+            }
+        }
+    }
+    
+    /**
+     * 处理媒体投影权限请求结果
+     */
+    fun onMediaProjectionPermissionResult(granted: Boolean, data: android.content.Intent? = null) {
+        _shouldRequestMediaProjection.value = false
+        _hasMediaProjectionPermission.value = granted
+        
+        if (granted && data != null) {
+            // 保存intent和resultCode到Service的静态变量
+            // 注意：这里 resultCode 应该从 ActivityResult 中获取，但我们暂时用 RESULT_OK
+            com.galize.app.service.FloatingBubbleService.screenCaptureIntent = data
+            com.galize.app.service.FloatingBubbleService.screenCaptureResultCode = android.app.Activity.RESULT_OK
+            logger.I("Media projection permission granted, intent saved")
+        } else if (!granted) {
+            _errorMessage.value = "屏幕截图权限被拒绝"
+        }
     }
 
     fun toggleService(context: Context) {

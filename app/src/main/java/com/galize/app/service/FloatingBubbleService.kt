@@ -79,20 +79,15 @@ class FloatingBubbleService : Service() {
             
             createNotificationChannel()
             
-            // Android 14+ 需要指定前台服务类型，但需要对应权限
-            // 暂时使用兼容方式：不指定类型（仅用于测试悬浮球显示）
+            // Android 14+ 需要指定前台服务类型
+            // 使用 FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION 以支持 MediaProjection API
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                // Android 14+ 尝试使用 specialUse，如果失败则不使用类型
-                try {
-                    startForeground(
-                        NOTIFICATION_ID, 
-                        createNotification(),
-                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-                    )
-                } catch (e: SecurityException) {
-                    logger.W("specialUse permission not available, using legacy startForeground")
-                    startForeground(NOTIFICATION_ID, createNotification())
-                }
+                // Android 14+ 使用 mediaProjection 类型
+                startForeground(
+                    NOTIFICATION_ID, 
+                    createNotification(),
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+                )
             } else {
                 startForeground(NOTIFICATION_ID, createNotification())
             }
@@ -193,6 +188,19 @@ class FloatingBubbleService : Service() {
     private fun onBubbleTapped() {
         logger.I("Bubble tapped - starting Galize pipeline")
         
+        // 检查屏幕截图权限
+        if (!checkScreenCapturePermission()) {
+            logger.W("Screen capture permission not available")
+            Toast.makeText(
+                this,
+                "请先授予屏幕截图权限以使用此功能",
+                Toast.LENGTH_LONG
+            ).show()
+            // 这里可以发送广播或事件通知主Activity显示权限请求对话框
+            // 但由于Service无法直接启动Activity，我们只提示用户
+            return
+        }
+        
         val captureManager = screenCaptureManager
         if (captureManager == null) {
             logger.E("Screen capture manager not initialized")
@@ -233,6 +241,16 @@ class FloatingBubbleService : Service() {
                 }
             }
         }
+    }
+    
+    /**
+     * 检查屏幕截图权限是否可用
+     */
+    private fun checkScreenCapturePermission(): Boolean {
+        // 检查是否有 MediaProjection 权限
+        // 由于 MediaProjection 权限无法直接检查，我们检查 screenCaptureManager 是否已初始化
+        // 以及是否有有效的 screenCaptureIntent
+        return screenCaptureIntent != null && screenCaptureResultCode != 0
     }
 
     /**

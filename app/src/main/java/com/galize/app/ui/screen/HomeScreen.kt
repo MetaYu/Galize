@@ -1,5 +1,6 @@
 package com.galize.app.ui.screen
 
+import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -34,6 +35,8 @@ fun HomeScreen(
     val hasNotificationPermission by viewModel.hasNotificationPermission.collectAsState()
     val hasMediaProjectionPermission by viewModel.hasMediaProjectionPermission.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
+    val permissionDialogState by viewModel.permissionDialogState.collectAsState()
+    val shouldRequestMediaProjection by viewModel.shouldRequestMediaProjection.collectAsState()
     
     // Snackbar host state
     val snackbarHostState = remember { SnackbarHostState() }
@@ -63,9 +66,50 @@ fun HomeScreen(
     
     // Media projection permission launcher (Android 14+)
     val mediaProjectionPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        viewModel.checkPermissions(context)
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val granted = result.resultCode == Activity.RESULT_OK
+        val data = result.data
+        viewModel.onMediaProjectionPermissionResult(granted, data)
+    }
+    
+    // Handle media projection permission request
+    LaunchedEffect(shouldRequestMediaProjection) {
+        if (shouldRequestMediaProjection) {
+            val permissionManager = com.galize.app.service.ScreenCapturePermissionManager(context)
+            mediaProjectionPermissionLauncher.launch(permissionManager.createScreenCaptureIntent())
+        }
+    }
+    
+    // Permission dialog
+    if (permissionDialogState.showDialog && permissionDialogState.permissionResult != null) {
+        val permissionResult = permissionDialogState.permissionResult!!
+        AlertDialog(
+            onDismissRequest = { viewModel.clearPermissionDialog() },
+            title = { Text("需要${permissionResult.title}") },
+            text = { Text(permissionResult.message) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.clearPermissionDialog()
+                        val intent = com.galize.app.utils.PermissionManager.createPermissionSettingIntent(
+                            context,
+                            permissionResult.type
+                        )
+                        intent?.let { context.startActivity(it) }
+                    }
+                ) {
+                    Text("去授权")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { viewModel.clearPermissionDialog() }
+                ) {
+                    Text("取消")
+                }
+            }
+        )
     }
 
     Scaffold(
@@ -113,15 +157,14 @@ fun HomeScreen(
             if (!hasOverlayPermission) {
                 OutlinedButton(
                     onClick = {
-                        val intent = Intent(
-                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                            Uri.parse("package:${context.packageName}")
+                        viewModel.requestPermission(
+                            context,
+                            com.galize.app.utils.PermissionManager.PermissionType.OVERLAY
                         )
-                        context.startActivity(intent)
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Grant Overlay Permission")
+                    Text("授予悬浮窗权限")
                 }
                 Spacer(modifier = Modifier.height(16.dp))
             }
@@ -134,13 +177,26 @@ fun HomeScreen(
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Grant Notification Permission")
+                    Text("授予通知权限")
                 }
                 Spacer(modifier = Modifier.height(16.dp))
             }
             
-            // TODO: MediaProjection 权限按钮后续实现截图功能时需要
-            // if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && !hasMediaProjectionPermission) { ... }
+            // MediaProjection 权限按钮
+            if (!hasMediaProjectionPermission) {
+                OutlinedButton(
+                    onClick = {
+                        viewModel.requestPermission(
+                            context,
+                            com.galize.app.utils.PermissionManager.PermissionType.MEDIA_PROJECTION
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("授予屏幕截图权限")
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
 
             // Main toggle button
             Button(

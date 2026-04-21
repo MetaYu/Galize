@@ -18,6 +18,25 @@ import com.galize.app.utils.GalizeLogger
 /**
  * Manages screen capture using MediaProjection API.
  * 
+ * ⚠️ IMPORTANT NOTE ABOUT PERMISSION:
+ * - System shows "Screen Recording" permission dialog
+ * - BUT we ONLY capture a SINGLE SCREENSHOT, NOT continuous recording
+ * - This is an Android limitation: no direct screenshot API for third-party apps
+ * - MediaProjection is the only way to capture screen content
+ * 
+ * Usage:
+ * 1. User grants permission via system dialog (shows as "screen recording")
+ * 2. We get resultCode and Intent data from the permission result
+ * 3. Create this manager instance with those credentials
+ * 4. Call [captureScreen] to capture a SINGLE screenshot (not video!)
+ * 5. Call [release] when done to free resources
+ * 
+ * Privacy guarantee:
+ * - We only capture ONE frame when user taps the floating bubble
+ * - No continuous monitoring or recording
+ * - Captured image is used immediately for OCR and then discarded
+ * - No screenshots are saved to storage
+ * 
  * Lifecycle:
  * 1. Create instance with valid resultCode and data from permission request
  * 2. Call [captureScreen] to capture a single screenshot
@@ -68,6 +87,15 @@ class ScreenCaptureManager(
             }
 
             imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
+
+            // Android 要求必须注册回调来管理 MediaProjection 状态
+            val callback = object : MediaProjection.Callback() {
+                override fun onStop() {
+                    logger.D("MediaProjection stopped")
+                    release()
+                }
+            }
+            mediaProjection?.registerCallback(callback, handler)
 
             virtualDisplay = mediaProjection?.createVirtualDisplay(
                 "GalizeCapture",
