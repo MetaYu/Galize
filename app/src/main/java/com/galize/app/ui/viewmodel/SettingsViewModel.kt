@@ -31,8 +31,14 @@ class SettingsViewModel @Inject constructor(
     private val _apiBaseUrl = MutableStateFlow("https://api.openai.com/v1")
     val apiBaseUrl: StateFlow<String> = _apiBaseUrl
 
+    private val _aiModel = MutableStateFlow("gpt-4o-mini")
+    val aiModel: StateFlow<String> = _aiModel
+
     private val _selectedPersona = MutableStateFlow("default")
     val selectedPersona: StateFlow<String> = _selectedPersona
+    
+    private val _customSystemPrompt = MutableStateFlow("")
+    val customSystemPrompt: StateFlow<String> = _customSystemPrompt
     
     // 权限状态
     private val _permissionState = MutableStateFlow(PermissionState())
@@ -50,7 +56,13 @@ class SettingsViewModel @Inject constructor(
             settingsRepository.apiBaseUrl.collect { _apiBaseUrl.value = it }
         }
         viewModelScope.launch {
+            settingsRepository.aiModel.collect { _aiModel.value = it }
+        }
+        viewModelScope.launch {
             settingsRepository.persona.collect { _selectedPersona.value = it }
+        }
+        viewModelScope.launch {
+            settingsRepository.customSystemPrompt.collect { _customSystemPrompt.value = it }
         }
         // 初始化时检查权限
         checkPermissions()
@@ -122,8 +134,18 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setApiBaseUrl(url) }
     }
 
+    fun updateAiModel(model: String) {
+        _aiModel.value = model
+        viewModelScope.launch { settingsRepository.setAiModel(model) }
+    }
+
     fun updatePersona(persona: String) {
         _selectedPersona.value = persona
         viewModelScope.launch { settingsRepository.setPersona(persona) }
+    }
+
+    fun updateCustomSystemPrompt(prompt: String) {
+        _customSystemPrompt.value = prompt
+        viewModelScope.launch { settingsRepository.setCustomSystemPrompt(prompt) }
     }
 }

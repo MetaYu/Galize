@@ -1,6 +1,9 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
     <style name="Theme.Galize" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your theme here. -->
+        <item name="colorPrimary">@color/aurora_purple</item>
+        <item name="colorPrimaryDark">@color/night_sky</item>
+        <item name="colorAccent">@color/aurora_cyan</item>
+        <item name="android:statusBarColor">@color/night_sky</item>
+        <item name="android:navigationBarColor">@color/night_sky</item>
     </style>
 </resources>

@@ -54,6 +54,52 @@ class ScreenCaptureManager(
     private val handler = Handler(Looper.getMainLooper())
     private var isCapturing = false
 
+    init {
+        // 初始化时创建 MediaProjection（只能创建一次）
+        initializeMediaProjection()
+    }
+
+    private fun initializeMediaProjection() {
+        try {
+            val projectionManager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+            mediaProjection = projectionManager.getMediaProjection(resultCode, data)
+
+            if (mediaProjection == null) {
+                logger.E("Failed to create MediaProjection")
+                return
+            }
+
+            // 注册回调来管理 MediaProjection 状态
+            val callback = object : MediaProjection.Callback() {
+                override fun onStop() {
+                    logger.D("MediaProjection stopped")
+                    release()
+                }
+            }
+            mediaProjection?.registerCallback(callback, handler)
+            
+            // 初始化 ImageReader（只需创建一次）
+            val metrics = context.resources.displayMetrics
+            val width = metrics.widthPixels
+            val height = metrics.heightPixels
+            val density = metrics.densityDpi
+            imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
+            
+            // 创建 VirtualDisplay（只需创建一次）
+            virtualDisplay = mediaProjection?.createVirtualDisplay(
+                "GalizeCapture",
+                width, height, density,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                imageReader!!.surface,
+                null, handler
+            )
+            
+            logger.I("MediaProjection initialized successfully: ${width}x${height}@${density}")
+        } catch (e: Exception) {
+            logger.E("Failed to initialize MediaProjection: ${e.message}", e)
+        }
+    }
+
     /**
      * Captures the current screen and returns a Bitmap.
      * 
@@ -67,45 +113,20 @@ class ScreenCaptureManager(
             return
         }
 
+        if (mediaProjection == null || virtualDisplay == null || imageReader == null) {
+            logger.E("Screen capture not initialized")
+            callback(null)
+            return
+        }
+
         isCapturing = true
         logger.D("Starting screen capture")
 
         try {
+            // 直接使用已初始化的 VirtualDisplay 和 ImageReader
             val metrics = context.resources.displayMetrics
             val width = metrics.widthPixels
             val height = metrics.heightPixels
-            val density = metrics.densityDpi
-
-            val projectionManager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-            mediaProjection = projectionManager.getMediaProjection(resultCode, data)
-
-            if (mediaProjection == null) {
-                logger.E("Failed to create MediaProjection")
-                isCapturing = false
-                callback(null)
-                return
-            }
-
-            imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
-
-            // Android 要求必须注册回调来管理 MediaProjection 状态
-            val callback = object : MediaProjection.Callback() {
-                override fun onStop() {
-                    logger.D("MediaProjection stopped")
-                    release()
-                }
-            }
-            mediaProjection?.registerCallback(callback, handler)
-
-            virtualDisplay = mediaProjection?.createVirtualDisplay(
-                "GalizeCapture",
-                width, height, density,
-                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                imageReader!!.surface,
-                null, handler
-            )
-
-            logger.D("Virtual display created: ${width}x${height}@${density}")
 
             // Delay slightly to allow frame to render
             handler.postDelayed({
@@ -152,14 +173,19 @@ class ScreenCaptureManager(
     }
 
     private fun releaseCapture() {
-        logger.D("Releasing capture resources")
+        // 注意：不要释放 virtualDisplay 和 imageReader，因为它们需要复用
+        // 只需要清理 ImageReader 中的 pending images
         try {
-            virtualDisplay?.release()
-            virtualDisplay = null
-            imageReader?.close()
-            imageReader = null
+            imageReader?.let { reader ->
+                // 清除所有待处理的 images
+                while (true) {
+                    val image = reader.acquireNextImage()
+                    if (image == null) break
+                    image.close()
+                }
+            }
         } catch (e: Exception) {
-            logger.E("Error releasing capture: ${e.message}", e)
+            logger.E("Error clearing images: ${e.message}", e)
         }
     }
 

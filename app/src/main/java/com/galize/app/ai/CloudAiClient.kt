@@ -13,6 +13,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.net.SocketTimeoutException
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -38,8 +39,9 @@ class CloudAiClient @Inject constructor(
     private val gson = Gson()
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(90, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
         .build()
 
     private var apiKey: String = ""
@@ -75,7 +77,16 @@ class CloudAiClient @Inject constructor(
                 val prompt = promptBuilder.buildPrompt(context)
                 
                 logger.D("Calling API with model=$modelName")
-                val response = callApi(prompt)
+                val response = try {
+                    callApi(prompt)
+                } catch (e: SocketTimeoutException) {
+                    logger.W("API call timed out, retrying once...")
+                    try {
+                        callApi(prompt)
+                    } catch (e2: SocketTimeoutException) {
+                        throw Exception("AI \u54cd\u5e94\u8d85\u65f6\uff0c\u8bf7\u68c0\u67e5\u7f51\u7edc\u540e\u91cd\u8bd5")
+                    }
+                }
                 
                 logger.D("Parsing API response")
                 val parsed = parseResponse(response)
@@ -126,29 +137,44 @@ class CloudAiClient @Inject constructor(
 
     private fun parseResponse(response: String): ChoiceResult {
         return try {
-            val parsed = gson.fromJson(response, AiResponseFormat::class.java)
+            // Strip markdown code fences if present (e.g. ```json ... ```)
+            val cleaned = response.trim()
+                .removePrefix("```json")
+                .removePrefix("```")
+                .removeSuffix("```")
+                .trim()
+            
+            logger.D("Cleaned AI response: $cleaned")
+            
+            val parsed = gson.fromJson(cleaned, AiResponseFormat::class.java)
+            
+            if (parsed.pureHeart == null || parsed.chaos == null || parsed.philosopher == null) {
+                throw Exception("Missing required fields in AI response")
+            }
+            
             ChoiceResult(
                 pureHeart = Choice(
-                    text = parsed.pureHeart.text,
-                    description = parsed.pureHeart.description,
+                    text = parsed.pureHeart!!.text,
+                    description = parsed.pureHeart!!.description,
                     type = ChoiceType.PURE_HEART
                 ),
                 chaos = Choice(
-                    text = parsed.chaos.text,
-                    description = parsed.chaos.description,
+                    text = parsed.chaos!!.text,
+                    description = parsed.chaos!!.description,
                     type = ChoiceType.CHAOS
                 ),
                 philosopher = Choice(
-                    text = parsed.philosopher.text,
-                    description = parsed.philosopher.description,
+                    text = parsed.philosopher!!.text,
+                    description = parsed.philosopher!!.description,
                     type = ChoiceType.PHILOSOPHER
                 ),
                 subtext = parsed.subtext,
                 affinityDelta = parsed.affinityDelta
             )
         } catch (e: Exception) {
+            logger.E("Failed to parse AI response: ${e.message}\nRaw response: $response", e)
             ChoiceResult(
-                pureHeart = Choice(text = response.take(100), description = "", type = ChoiceType.PURE_HEART),
+                pureHeart = Choice(text = response.take(100), description = "Parse error", type = ChoiceType.PURE_HEART),
                 chaos = Choice(text = "...", description = "Parse error", type = ChoiceType.CHAOS),
                 philosopher = Choice(text = "...", description = "Parse error", type = ChoiceType.PHILOSOPHER),
                 subtext = "",
@@ -163,7 +189,7 @@ data class ChatRequest(
     val model: String,
     val messages: List<Message>,
     val temperature: Double = 0.8,
-    val maxTokens: Int = 1000
+    @SerializedName("max_tokens") val maxTokens: Int = 1000
 )
 
 data class Message(
@@ -181,9 +207,9 @@ data class ChatChoice(
 
 // Expected AI response format
 data class AiResponseFormat(
-    @SerializedName("pure_heart") val pureHeart: ChoiceOption,
-    @SerializedName("chaos") val chaos: ChoiceOption,
-    @SerializedName("philosopher") val philosopher: ChoiceOption,
+    @SerializedName("pure_heart") val pureHeart: ChoiceOption? = null,
+    @SerializedName("chaos") val chaos: ChoiceOption? = null,
+    @SerializedName("philosopher") val philosopher: ChoiceOption? = null,
     @SerializedName("subtext") val subtext: String = "",
     @SerializedName("affinity_delta") val affinityDelta: Int = 0
 )

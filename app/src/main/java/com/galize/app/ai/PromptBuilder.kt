@@ -7,7 +7,23 @@ import com.galize.app.model.ConversationContext
  */
 class PromptBuilder {
 
-    fun getSystemPrompt(): String = """
+    private var customSystemPrompt: String = ""
+
+    /**
+     * Set a custom system prompt. If blank, the default prompt will be used.
+     */
+    fun setCustomSystemPrompt(prompt: String) {
+        this.customSystemPrompt = prompt
+    }
+
+    fun getSystemPrompt(): String {
+        if (customSystemPrompt.isNotBlank()) {
+            return customSystemPrompt
+        }
+        return getDefaultSystemPrompt()
+    }
+
+    fun getDefaultSystemPrompt(): String = """
 You are Galize, a social interaction AI assistant that turns real conversations into a Visual Novel (Galgame) experience. 
 
 For each user request, you MUST respond with a valid JSON object containing exactly three reply options in the following format:
@@ -41,8 +57,9 @@ IMPORTANT: Reply ONLY with valid JSON. No markdown, no extra text.
         sb.appendLine("=== Chat History ===")
 
         context.messages.forEach { msg ->
-            val sender = if (msg.isFromMe) "[Me]" else "[Them]"
-            sb.appendLine("$sender ${msg.text}")
+            val sender = if (msg.isFromMe) "[Me]" else "[${msg.senderName.ifEmpty { "Them" }}]"
+            val timePrefix = if (msg.displayTime.isNotEmpty()) "(${msg.displayTime}) " else ""
+            sb.appendLine("$timePrefix$sender ${msg.text}")
         }
 
         sb.appendLine()

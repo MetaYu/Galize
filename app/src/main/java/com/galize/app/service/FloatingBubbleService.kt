@@ -13,19 +13,29 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.WindowManager
 import android.widget.Toast
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.room.Room
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import com.galize.app.R
 import com.galize.app.ai.CloudAiClient
 import com.galize.app.ai.LocalAiClient
 import com.galize.app.ai.PromptBuilder
+import com.galize.app.model.ChatMessage
 import com.galize.app.model.ChoiceResult
 import com.galize.app.model.ConversationContext
+import com.galize.app.model.db.AppDatabase
+import com.galize.app.model.db.ChatLogEntity
+import com.galize.app.model.db.ConversationEntity
 import com.galize.app.ocr.ChatMessageParser
 import com.galize.app.ocr.OcrEngine
+import com.galize.app.repository.ChatRepository
 import com.galize.app.ui.overlay.FloatingBubbleContent
 import com.galize.app.utils.GalizeLogger
 import kotlinx.coroutines.CoroutineScope
@@ -33,6 +43,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 class FloatingBubbleService : Service() {
 
@@ -47,6 +58,9 @@ class FloatingBubbleService : Service() {
     private lateinit var windowManager: WindowManager
     private var bubbleView: ComposeView? = null
     private var panelView: ComposeView? = null
+    
+    // Processing state drives bubble animation
+    private val isProcessing = MutableStateFlow(false)
     private var screenCaptureManager: ScreenCaptureManager? = null
     
     // Coroutine scope for background tasks
@@ -56,6 +70,12 @@ class FloatingBubbleService : Service() {
     private lateinit var cloudAiClient: CloudAiClient
     private lateinit var localAiClient: LocalAiClient
     private val promptBuilder = PromptBuilder()
+    
+    // Repository for saving chat history
+    private lateinit var chatRepository: ChatRepository
+    
+    // Repository for reading AI settings
+    private lateinit var settingsRepository: com.galize.app.repository.SettingsRepository
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -76,6 +96,43 @@ class FloatingBubbleService : Service() {
             // Initialize AI clients
             cloudAiClient = CloudAiClient(promptBuilder)
             localAiClient = LocalAiClient()
+            
+            // Initialize settings repository
+            settingsRepository = com.galize.app.repository.SettingsRepository(applicationContext)
+            
+            // Load AI configuration from settings
+            serviceScope.launch {
+                try {
+                    val apiKey = settingsRepository.apiKey.first()
+                    val baseUrl = settingsRepository.apiBaseUrl.first()
+                    val model = settingsRepository.aiModel.first()
+                    val customPrompt = settingsRepository.customSystemPrompt.first()
+                    
+                    if (customPrompt.isNotBlank()) {
+                        promptBuilder.setCustomSystemPrompt(customPrompt)
+                        logger.I("Custom system prompt loaded")
+                    }
+                    
+                    if (apiKey.isNotBlank()) {
+                        cloudAiClient.configure(apiKey, baseUrl, model)
+                        logger.I("AI client configured with model=$model")
+                    } else {
+                        logger.W("API key not configured, will use local AI fallback")
+                    }
+                } catch (e: Exception) {
+                    logger.E("Failed to load AI configuration: ${e.message}", e)
+                }
+            }
+            
+            // Initialize chat repository for saving history
+            val database = Room.databaseBuilder(
+                applicationContext,
+                AppDatabase::class.java,
+                "galize_database"
+            )
+                .fallbackToDestructiveMigration(true)
+                .build()
+            chatRepository = ChatRepository(database)
             
             createNotificationChannel()
             
@@ -161,7 +218,9 @@ class FloatingBubbleService : Service() {
 
         bubbleView = ComposeView(this).apply {
             setContent {
+                val processing by isProcessing.collectAsState()
                 FloatingBubbleContent(
+                    isProcessing = processing,
                     onTap = { onBubbleTapped() },
                     onDrag = { dx, dy ->
                         params.x += dx.toInt()
@@ -212,8 +271,8 @@ class FloatingBubbleService : Service() {
             return
         }
 
-        // Show processing notification
-        Toast.makeText(this, "正在分析对话...", Toast.LENGTH_SHORT).show()
+        // Set processing state to drive bubble animation
+        isProcessing.value = true
 
         // Execute pipeline in background
         serviceScope.launch {
@@ -257,6 +316,8 @@ class FloatingBubbleService : Service() {
      * Processes a captured screen through OCR and AI pipeline.
      */
     private suspend fun processCapturedScreen(bitmap: android.graphics.Bitmap) {
+        var conversationId: Long? = null
+        
         try {
             // Step 2: OCR
             logger.D("Step 2: Running OCR")
@@ -271,11 +332,23 @@ class FloatingBubbleService : Service() {
                 return
             }
 
-            // Step 3: Parse chat messages
-            logger.D("Step 3: Parsing chat messages")
+            // Step 2.5: Detect foreground app and extract contact name
+            logger.D("Step 2.5: Detecting app and contact name")
+            val appDetector = com.galize.app.utils.ForegroundAppDetector(this)
+            val packageName = appDetector.getForegroundPackageName()
+            val appType = appDetector.detectAppType(packageName)
+            val appName = appDetector.getAppName(packageName)
+            
+            val screenHeight = resources.displayMetrics.heightPixels
             val screenWidth = resources.displayMetrics.widthPixels
             val parser = ChatMessageParser()
-            val messages = parser.parse(textBlocks, screenWidth)
+            val contactName = parser.extractContactName(textBlocks, screenHeight, screenWidth)
+            
+            logger.I("Detected app: $appName ($packageName), contact: $contactName")
+
+            // Step 3: Parse chat messages with contact name and screen dimensions
+            logger.D("Step 3: Parsing chat messages")
+            val messages = parser.parse(textBlocks, screenWidth, screenHeight, contactName)
 
             if (messages.isEmpty()) {
                 logger.W("No chat messages parsed")
@@ -286,10 +359,50 @@ class FloatingBubbleService : Service() {
             }
 
             logger.I("Parsed ${messages.size} messages from OCR")
+            
+            // Find or create conversation (reuse existing for same contact)
+            conversationId = chatRepository.findOrCreateConversation(
+                contactName = contactName,
+                packageName = packageName,
+                appType = appType.name
+            )
+
+            // Build ChatLogEntity list with sender name and display time
+            val chatLogs = messages.map { message ->
+                ChatLogEntity(
+                    conversationId = conversationId,
+                    text = message.text,
+                    isFromMe = message.isFromMe,
+                    senderName = message.senderName,
+                    displayTime = message.displayTime
+                )
+            }
+
+            // Append only new messages (auto-dedup against existing)
+            val appendedCount = chatRepository.appendNewMessages(conversationId, chatLogs)
+            logger.D("Appended $appendedCount new messages to conversation $conversationId")
 
             // Step 4: AI generates choices
             logger.D("Step 4: Generating AI choices")
-            val context = ConversationContext(messages = messages)
+            
+            // Reload settings before AI call to pick up any changes
+            try {
+                val apiKey = settingsRepository.apiKey.first()
+                val baseUrl = settingsRepository.apiBaseUrl.first()
+                val model = settingsRepository.aiModel.first()
+                val customPrompt = settingsRepository.customSystemPrompt.first()
+                promptBuilder.setCustomSystemPrompt(customPrompt)
+                if (apiKey.isNotBlank()) {
+                    cloudAiClient.configure(apiKey, baseUrl, model)
+                }
+            } catch (e: Exception) {
+                logger.W("Failed to reload settings: ${e.message}")
+            }
+            
+            val context = ConversationContext(
+                messages = messages,
+                appType = appType
+            )
             
             val choiceResult: ChoiceResult = if (cloudAiClient.isAvailable()) {
                 logger.D("Using cloud AI")
@@ -307,12 +420,34 @@ class FloatingBubbleService : Service() {
 
             // Step 5: Show result panel
             logger.D("Step 5: Showing choice panel")
+            isProcessing.value = false
             serviceScope.launch(Dispatchers.Main) {
                 showChoicePanel(choiceResult)
+            }
+            
+            // Update conversation metadata
+            conversationId?.let { id ->
+                val totalCount = chatRepository.getMessageCount(id)
+                val summary = messages.takeLast(3).joinToString(" | ") { 
+                    "[${it.senderName}] ${it.text.take(30)}" 
+                }
+                chatRepository.updateConversation(
+                    ConversationEntity(
+                        id = id,
+                        endedAt = System.currentTimeMillis(),
+                        appType = appType.name,
+                        packageName = packageName,
+                        contactName = contactName,
+                        totalAffinity = 50, // TODO: load from settings
+                        messageCount = totalCount,
+                        summary = summary
+                    )
+                )
             }
 
         } catch (e: Exception) {
             logger.E("Pipeline processing failed: ${e.message}", e)
+            isProcessing.value = false
             serviceScope.launch(Dispatchers.Main) {
                 Toast.makeText(this@FloatingBubbleService, "处理失败: ${e.message}", Toast.LENGTH_LONG).show()
             }
@@ -332,14 +467,13 @@ class FloatingBubbleService : Service() {
         
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.BOTTOM
-            y = 100 // Offset from bottom
         }
 
         panelView = ComposeView(this).apply {

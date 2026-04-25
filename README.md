@@ -66,16 +66,15 @@ com.galize.app/
 
 | 模块 | 功能 | 状态 |
 |------|------|------|
-| 悬浮球 Service | 可拖拽悬浮球 + 前台服务生命周期管理 | ✅ 已完成 |
-| 屏幕截图 | MediaProjection API 截图 + 权限引导 | 📋 计划中 |
-| OCR 引擎 | ML Kit Text Recognition v2 中文识别 | 📋 计划中 |
-| 聊天解析 | 气泡位置解析，区分我方/对方消息 | 📋 计划中 |
-| AI 决策 — 云端 | CloudAiClient（OpenAI-compatible API），JSON 格式三选项 | 📋 计划中 |
-| AI 决策 — 本地降级 | LocalAiClient 离线启发式回退 | 📋 计划中 |
-| 悬浮结果面板 | 三色选项卡 + 好感度进度条 + 潜台词显示 | 📋 计划中 |
-| App 主界面 | 首页（权限开关）/ 设置（API Key、人设）/ 历史 | 📋 计划中 |
-| 数据持久化 | Room 对话历史 + DataStore 偏好设置 | 📋 计划中 |
-| 主题 | 赛博朋克紫 Material 3 主题 | 📋 计划中 |
+| 悬浮球 Service | 可拖拽悬浮球 + 前台服务生命周期管理 | done |
+| 屏幕截图 | MediaProjection API 截图 + 权限引导 | done |
+| OCR 引擎 | ML Kit Text Recognition v2 中文识别 | ✅ 已完成 |
+| 聊天解析 | 气泡位置解析，区分我方/对方消息 | ✅ 已完成 |
+| AI 决策 — 云端 | CloudAiClient（OpenAI-compatible API），JSON 格式三选项 | ✅ 已完成 |
+| 悬浮结果面板 | 三色选项卡 + 好感度进度条 + 潜台词显示 | ✅ 已完成 |
+| App 主界面 | 首页（权限开关）/ 设置（API Key、人设）/ 历史 | ✅ 已完成 |
+| 数据持久化 | Room 对话历史 + DataStore 偏好设置 | ✅ 已完成 |
+| 主题 | 赛博朋克紫 Material 3 主题 | ✅ 已完成 |
 
 ### Phase 2 — 体验增强 🚧
 
@@ -83,7 +82,7 @@ com.galize.app/
 |------|------|------|
 | AI 本地推理 | Google AI Edge 替代启发式降级 | 📋 计划中 |
 | 自动填充 | 选中选项直接填入输入框（无障碍服务） | 📋 计划中 |
-| 多 App 适配 | 微信 / QQ / Telegram 等聊天布局特化解析 | 📋 计划中 |
+| 多 App 适配 | 微信 / QQ / 抖音 等聊天布局特化解析 | 📋 计划中 |
 | 好感度趋势图 | 历史页展示好感度变化曲线 | 📋 计划中 |
 | 对话上下文记忆 | 多轮对话上下文窗口，提升 AI 连贯性 | 📋 计划中 |
 

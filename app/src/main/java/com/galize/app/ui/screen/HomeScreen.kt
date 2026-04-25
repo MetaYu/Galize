@@ -1,25 +1,35 @@
 package com.galize.app.ui.screen
 
 import android.app.Activity
-import android.content.Intent
-import android.net.Uri
 import android.os.Build
-import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.galize.app.ui.theme.*
 import com.galize.app.ui.viewmodel.HomeViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -27,7 +37,7 @@ import com.galize.app.ui.viewmodel.HomeViewModel
 fun HomeScreen(
     onNavigateToSettings: () -> Unit,
     onNavigateToHistory: () -> Unit,
-    viewModel: HomeViewModel = hiltViewModel()
+    viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
     val isServiceRunning by viewModel.isServiceRunning.collectAsState()
@@ -37,203 +47,346 @@ fun HomeScreen(
     val errorMessage by viewModel.errorMessage.collectAsState()
     val permissionDialogState by viewModel.permissionDialogState.collectAsState()
     val shouldRequestMediaProjection by viewModel.shouldRequestMediaProjection.collectAsState()
-    
-    // Snackbar host state
+
     val snackbarHostState = remember { SnackbarHostState() }
-    
-    // Show error snackbar when there's an error
+
     LaunchedEffect(errorMessage) {
         errorMessage?.let {
-            snackbarHostState.showSnackbar(
-                message = it,
-                duration = SnackbarDuration.Long
-            )
+            snackbarHostState.showSnackbar(message = it, duration = SnackbarDuration.Long)
             viewModel.clearError()
         }
     }
 
-    // Check permissions when screen loads
-    LaunchedEffect(Unit) {
-        viewModel.checkPermissions(context)
+    LaunchedEffect(Unit) { viewModel.checkPermissions(context) }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { viewModel.checkPermissions(context) }
+
+    val mediaProjectionPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        viewModel.onMediaProjectionPermissionResult(
+            result.resultCode == Activity.RESULT_OK,
+            result.data,
+        )
     }
 
-    // Notification permission launcher (Android 13+)
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        viewModel.checkPermissions(context)
-    }
-    
-    // Media projection permission launcher (Android 14+)
-    val mediaProjectionPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        val granted = result.resultCode == Activity.RESULT_OK
-        val data = result.data
-        viewModel.onMediaProjectionPermissionResult(granted, data)
-    }
-    
-    // Handle media projection permission request
     LaunchedEffect(shouldRequestMediaProjection) {
         if (shouldRequestMediaProjection) {
-            val permissionManager = com.galize.app.service.ScreenCapturePermissionManager(context)
-            mediaProjectionPermissionLauncher.launch(permissionManager.createScreenCaptureIntent())
+            val pm = com.galize.app.service.ScreenCapturePermissionManager(context)
+            mediaProjectionPermissionLauncher.launch(pm.createScreenCaptureIntent())
         }
     }
-    
+
     // Permission dialog
     if (permissionDialogState.showDialog && permissionDialogState.permissionResult != null) {
-        val permissionResult = permissionDialogState.permissionResult!!
+        val pr = permissionDialogState.permissionResult!!
         AlertDialog(
             onDismissRequest = { viewModel.clearPermissionDialog() },
-            title = { Text("需要${permissionResult.title}") },
-            text = { Text(permissionResult.message) },
+            title = { Text("需要${pr.title}") },
+            text = { Text(pr.message) },
             confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.clearPermissionDialog()
-                        val intent = com.galize.app.utils.PermissionManager.createPermissionSettingIntent(
-                            context,
-                            permissionResult.type
-                        )
-                        intent?.let { context.startActivity(it) }
-                    }
-                ) {
-                    Text("去授权")
-                }
+                Button(onClick = {
+                    viewModel.clearPermissionDialog()
+                    com.galize.app.utils.PermissionManager
+                        .createPermissionSettingIntent(context, pr.type)
+                        ?.let { context.startActivity(it) }
+                }) { Text("去授权") }
             },
             dismissButton = {
-                TextButton(
-                    onClick = { viewModel.clearPermissionDialog() }
-                ) {
-                    Text("取消")
-                }
-            }
+                TextButton(onClick = { viewModel.clearPermissionDialog() }) { Text("取消") }
+            },
         )
     }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        containerColor = NightSky,
         topBar = {
             TopAppBar(
-                title = { Text("Galize") },
+                title = {
+                    Text(
+                        "Galize",
+                        style = TextStyle(
+                            brush = auroraHorizontalBrush(),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 22.sp,
+                        ),
+                    )
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                ),
                 actions = {
                     IconButton(onClick = onNavigateToHistory) {
-                        Icon(Icons.Default.History, contentDescription = "History")
+                        Icon(Icons.Default.History, "History", tint = AuroraViolet)
                     }
                     IconButton(onClick = onNavigateToSettings) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings")
+                        Icon(Icons.Default.Settings, "Settings", tint = AuroraViolet)
                     }
-                }
+                },
             )
-        }
+        },
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(24.dp),
+                .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
         ) {
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // ── Brand section ──
             Text(
                 text = "万物皆可 Galgame",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
+                style = TextStyle(
+                    brush = auroraHorizontalBrush(),
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.Bold,
+                ),
             )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
+            Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = "Everything is a Visual Novel",
-                fontSize = 14.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                fontSize = 13.sp,
+                color = Color(0xFFBDB3CC).copy(alpha = 0.7f),
             )
 
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(40.dp))
 
-            // Overlay permission check
+            // ── Permission cards ──
             if (!hasOverlayPermission) {
-                OutlinedButton(
+                PermissionCard(
+                    icon = Icons.Default.Layers,
+                    label = "悬浮窗权限",
                     onClick = {
                         viewModel.requestPermission(
                             context,
-                            com.galize.app.utils.PermissionManager.PermissionType.OVERLAY
+                            com.galize.app.utils.PermissionManager.PermissionType.OVERLAY,
                         )
                     },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("授予悬浮窗权限")
-                }
-                Spacer(modifier = Modifier.height(16.dp))
+                )
+                Spacer(modifier = Modifier.height(10.dp))
             }
-
-            // Notification permission check (Android 13+)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
-                OutlinedButton(
+                PermissionCard(
+                    icon = Icons.Default.Notifications,
+                    label = "通知权限",
                     onClick = {
                         notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
                     },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("授予通知权限")
-                }
-                Spacer(modifier = Modifier.height(16.dp))
+                )
+                Spacer(modifier = Modifier.height(10.dp))
             }
-            
-            // MediaProjection 权限按钮
             if (!hasMediaProjectionPermission) {
-                OutlinedButton(
+                PermissionCard(
+                    icon = Icons.Default.Screenshot,
+                    label = "屏幕截图权限",
                     onClick = {
                         viewModel.requestPermission(
                             context,
-                            com.galize.app.utils.PermissionManager.PermissionType.MEDIA_PROJECTION
+                            com.galize.app.utils.PermissionManager.PermissionType.MEDIA_PROJECTION,
                         )
                     },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("授予屏幕截图权限")
-                }
-                Spacer(modifier = Modifier.height(16.dp))
+                )
+                Spacer(modifier = Modifier.height(10.dp))
             }
 
-            // Main toggle button
-            Button(
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // ── Main toggle button (aurora gradient) ──
+            val allPermissionsGranted = hasOverlayPermission && hasNotificationPermission
+            AuroraButton(
+                text = if (isServiceRunning) "Stop Galize" else "Start Galize",
+                enabled = allPermissionsGranted,
                 onClick = { viewModel.toggleService(context) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                enabled = hasOverlayPermission && hasNotificationPermission
-            ) {
-                Text(
-                    text = if (isServiceRunning) "Stop Galize" else "Start Galize",
-                    fontSize = 18.sp
-                )
-            }
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Status card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+            // ── Status card ──
+            StatusCard(isRunning = isServiceRunning)
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            // ── Footer ──
+            Text(
+                text = "Powered by Galize",
+                fontSize = 11.sp,
+                color = Color(0xFFBDB3CC).copy(alpha = 0.3f),
+                modifier = Modifier.padding(bottom = 16.dp),
+            )
+        }
+    }
+}
+
+// ── Sub-components ──────────────────────────────────────────
+
+@Composable
+private fun PermissionCard(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+) {
+    Card(
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = NightElevated.copy(alpha = 0.6f)),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = AuroraCyan,
+                modifier = Modifier.size(22.dp),
+            )
+            Spacer(modifier = Modifier.width(14.dp))
+            Text(
+                text = label,
+                color = Color(0xFFE8E0F0),
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = Color(0xFFBDB3CC).copy(alpha = 0.5f),
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun AuroraButton(
+    text: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "btn")
+    // Use a full 360-degree phase so the gradient loops seamlessly
+    val phase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(4000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "phase",
+    )
+
+    // Two full cycles so the gradient spans 2x width; shifting by 1x width
+    // produces the exact same visible pattern → seamless restart.
+    val loopColors = listOf(
+        AuroraPurple, AuroraCyan, AuroraPink,
+        AuroraPurple, AuroraCyan, AuroraPink,
+        AuroraPurple, // close the second cycle
+    )
+
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp),
+        shape = RoundedCornerShape(28.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Color.Transparent,
+            disabledContainerColor = NightElevated.copy(alpha = 0.4f),
+        ),
+        contentPadding = PaddingValues(),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(
+                    if (enabled) Modifier.drawBehind {
+                        // Gradient spans [−shift, 2w−shift]. Visible area [0, w]
+                        // always sits inside the gradient, so no edge-clamp artifacts.
+                        // At phase≈1 → shift≈w, visible shows 2nd cycle = same as 1st → seamless.
+                        val w = size.width
+                        val shift = phase * w
+                        drawRoundRect(
+                            brush = Brush.linearGradient(
+                                colors = loopColors,
+                                start = Offset(-shift, 0f),
+                                end = Offset(2f * w - shift, 0f),
+                            ),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(28.dp.toPx()),
+                        )
+                    } else Modifier
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = text,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (enabled) Color.White else Color(0xFFBDB3CC).copy(alpha = 0.4f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatusCard(isRunning: Boolean) {
+    val infiniteTransition = rememberInfiniteTransition(label = "status")
+    val borderAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = if (isRunning) 0.8f else 0.3f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "border_alpha",
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (isRunning) Modifier.border(
+                    width = 1.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            AuroraPurple.copy(alpha = borderAlpha),
+                            AuroraCyan.copy(alpha = borderAlpha),
+                            AuroraPink.copy(alpha = borderAlpha),
+                        ),
+                    ),
+                    shape = RoundedCornerShape(16.dp),
+                ) else Modifier
+            )
+            .clip(RoundedCornerShape(16.dp))
+            .background(NightElevated.copy(alpha = 0.45f))
+            .padding(16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(if (isRunning) AuroraGreen else Color(0xFF4A3D66)),
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+                Text(
+                    text = "Status",
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFFE8E0F0),
+                    fontSize = 14.sp,
                 )
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "Status",
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = if (isServiceRunning) "Floating bubble is active"
-                        else "Service is stopped",
-                        color = if (isServiceRunning) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                    )
-                }
+                Text(
+                    text = if (isRunning) "Floating bubble is active" else "Service is stopped",
+                    color = if (isRunning) AuroraGreen else Color(0xFFBDB3CC).copy(alpha = 0.5f),
+                    fontSize = 13.sp,
+                )
             }
         }
     }

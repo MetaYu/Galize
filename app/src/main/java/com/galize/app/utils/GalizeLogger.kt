@@ -24,11 +24,11 @@ class GalizeLogger(private val tag: String = "Galize") {
     }
 
     fun D(message: String) {
-        Log.d(tag, message)
+        logLong(Log.DEBUG, message)
     }
 
     fun I(message: String) {
-        Log.i(tag, message)
+        logLong(Log.INFO, message)
     }
 
     fun W(message: String, throwable: Throwable? = null) {
@@ -40,7 +40,25 @@ class GalizeLogger(private val tag: String = "Galize") {
     }
 
     fun V(message: String) {
-        Log.v(tag, message)
+        logLong(Log.VERBOSE, message)
+    }
+
+    /**
+     * 分段打印长日志，避免 Logcat 4000 字符截断
+     */
+    private fun logLong(level: Int, message: String, maxLen: Int = 3800) {
+        if (message.length <= maxLen) {
+            Log.println(level, tag, message)
+            return
+        }
+        var start = 0
+        var part = 1
+        while (start < message.length) {
+            val end = minOf(start + maxLen, message.length)
+            Log.println(level, tag, "[Part $part] ${message.substring(start, end)}")
+            start = end
+            part++
+        }
     }
 
     /**

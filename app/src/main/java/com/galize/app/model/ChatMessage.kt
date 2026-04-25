@@ -6,9 +6,11 @@ package com.galize.app.model
 data class ChatMessage(
     val text: String,
     val isFromMe: Boolean,
+    val senderName: String = "",          // 发言人名称（"我" 或 联系人名称）
+    val displayTime: String = "",          // OCR 识别的时间文本，如 "18:47"
     val timestamp: Long = System.currentTimeMillis(),
-    val positionX: Int = 0,  // X position on screen for debugging
-    val positionY: Int = 0   // Y position on screen for sorting
+    val positionX: Int = 0,               // X position on screen for debugging
+    val positionY: Int = 0                // Y position on screen for sorting
 )
 
 /**

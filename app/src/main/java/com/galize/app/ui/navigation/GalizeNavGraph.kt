@@ -7,6 +7,7 @@ import androidx.navigation.compose.rememberNavController
 import com.galize.app.ui.screen.HomeScreen
 import com.galize.app.ui.screen.SettingsScreen
 import com.galize.app.ui.screen.HistoryScreen
+import com.galize.app.ui.screen.HistoryDetailScreen
 
 @Composable
 fun GalizeNavGraph() {
@@ -23,7 +24,19 @@ fun GalizeNavGraph() {
             SettingsScreen(onBack = { navController.popBackStack() })
         }
         composable("history") {
-            HistoryScreen(onBack = { navController.popBackStack() })
+            HistoryScreen(
+                onBack = { navController.popBackStack() },
+                onConversationClick = { conversationId ->
+                    navController.navigate("history_detail/$conversationId")
+                }
+            )
+        }
+        composable("history_detail/{conversationId}") { backStackEntry ->
+            val conversationId = backStackEntry.arguments?.getString("conversationId")?.toLong() ?: 0
+            HistoryDetailScreen(
+                conversationId = conversationId,
+                onBack = { navController.popBackStack() }
+            )
         }
     }
 }

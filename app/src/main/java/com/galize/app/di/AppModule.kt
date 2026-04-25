@@ -44,6 +44,8 @@ object AppModule {
             context,
             AppDatabase::class.java,
             "galize_database"
-        ).build()
+        )
+            .fallbackToDestructiveMigration(true)
+            .build()
     }
 }

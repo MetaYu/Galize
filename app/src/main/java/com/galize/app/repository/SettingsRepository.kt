@@ -35,6 +35,7 @@ class SettingsRepository @Inject constructor(
         private val KEY_AI_MODEL = stringPreferencesKey("ai_model")
         private val KEY_PERSONA = stringPreferencesKey("persona")
         private val KEY_AFFINITY = intPreferencesKey("affinity")
+        private val KEY_CUSTOM_SYSTEM_PROMPT = stringPreferencesKey("custom_system_prompt")
     }
 
     val apiKey: Flow<String> = context.dataStore.data.map { prefs ->
@@ -55,6 +56,10 @@ class SettingsRepository @Inject constructor(
 
     val affinity: Flow<Int> = context.dataStore.data.map { prefs ->
         prefs[KEY_AFFINITY] ?: 50
+    }
+
+    val customSystemPrompt: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[KEY_CUSTOM_SYSTEM_PROMPT] ?: ""
     }
 
     suspend fun setApiKey(key: String) {
@@ -83,5 +88,9 @@ class SettingsRepository @Inject constructor(
         }.collect { current ->
             setAffinity(current + delta)
         }
+    }
+
+    suspend fun setCustomSystemPrompt(prompt: String) {
+        context.dataStore.edit { it[KEY_CUSTOM_SYSTEM_PROMPT] = prompt }
     }
 }
